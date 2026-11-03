@@ -10,8 +10,12 @@ import {
   Box,
   KeyRound,
   ArrowRight,
-  Info
+  Info,
+  Server,
+  CheckCircle2,
+  RefreshCw
 } from 'lucide-react';
+import api from '../services/api';
 import { useLocker } from '../context/LockerContext';
 
 export default function Login() {
@@ -25,6 +29,35 @@ export default function Login() {
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
   const [showForgotModal, setShowForgotModal] = useState(false);
+  const [showServerConfig, setShowServerConfig] = useState(false);
+  const [serverUrl, setServerUrl] = useState(() => api.getBaseUrl());
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState(null);
+
+  const handleTestConnection = async () => {
+    setTestingConnection(true);
+    setConnectionStatus(null);
+    try {
+      const res = await api.testConnection(serverUrl);
+      if (res.success) {
+        api.setBaseUrl(serverUrl);
+        setConnectionStatus({ type: 'success', text: 'Backend connected! (Server healthy)' });
+      } else {
+        setConnectionStatus({ type: 'error', text: `Cannot reach backend: ${res.error || 'Server offline'}` });
+      }
+    } catch (err) {
+      setConnectionStatus({ type: 'error', text: err.message || 'Connection failed' });
+    } finally {
+      setTestingConnection(false);
+    }
+  };
+
+  const handleSaveServerUrl = (e) => {
+    e.preventDefault();
+    const updated = api.setBaseUrl(serverUrl);
+    setServerUrl(updated);
+    setConnectionStatus({ type: 'success', text: `Saved: ${updated}` });
+  };
 
   // Auto redirect if already authenticated
   useEffect(() => {
@@ -198,10 +231,61 @@ export default function Login() {
           </form>
 
           {/* Security Notice Footer */}
-          <div className="mt-7 pt-5 border-t border-slate-100 flex items-center justify-center gap-2 text-slate-500 text-xs text-center">
-            <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span>Encrypted owner session with bcrypt & JWT security</span>
+          <div className="mt-7 pt-5 border-t border-slate-100 flex items-center justify-between text-slate-500 text-xs">
+            <div className="flex items-center gap-1.5 text-slate-500 text-[11px]">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span>JWT & bcrypt Secured</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowServerConfig(!showServerConfig)}
+              className="inline-flex items-center gap-1 text-[11px] font-mono text-blue-600 hover:text-blue-800 transition"
+            >
+              <Server className="w-3 h-3" />
+              <span>{showServerConfig ? 'Hide API URL' : 'API Endpoint'}</span>
+            </button>
           </div>
+
+          {/* Expandable Server Connection Config */}
+          {showServerConfig && (
+            <div className="mt-3 p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-2.5 animate-fadeIn">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-slate-700 text-[11px]">Backend Server URL</span>
+                <span className="text-[10px] text-slate-400 font-mono">Port 5000</span>
+              </div>
+              <form onSubmit={handleSaveServerUrl} className="flex gap-2">
+                <input
+                  type="text"
+                  value={serverUrl}
+                  onChange={(e) => setServerUrl(e.target.value)}
+                  placeholder="http://localhost:5000/api"
+                  className="flex-1 px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+                <button
+                  type="button"
+                  onClick={handleTestConnection}
+                  disabled={testingConnection}
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg text-xs transition disabled:opacity-50 shrink-0"
+                >
+                  {testingConnection ? 'Testing...' : 'Test'}
+                </button>
+              </form>
+              {connectionStatus && (
+                <div className={`p-2 rounded-lg text-[11px] font-medium flex items-center gap-1.5 ${
+                  connectionStatus.type === 'success'
+                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                    : 'bg-rose-50 text-rose-800 border border-rose-200'
+                }`}>
+                  {connectionStatus.type === 'success' ? (
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-600" />
+                  ) : (
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0 text-rose-600" />
+                  )}
+                  <span>{connectionStatus.text}</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Public Courier Access Info Pill */}

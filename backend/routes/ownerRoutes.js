@@ -1,5 +1,6 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import db from '../database/db.js';
 import { authenticateOwner } from '../middleware/auth.js';
 import { logActivity } from '../services/activityLogger.js';
@@ -61,9 +62,17 @@ router.put('/profile', authenticateOwner, (req, res) => {
 
     logActivity('auth', 'Profile Updated', `Owner profile updated for '${username}'`, 'success');
 
+    const secret = process.env.JWT_SECRET || 'fallback_secret_key_locker';
+    const newToken = jwt.sign(
+      { id: req.owner.id, username: username.trim(), email: email.trim() },
+      secret,
+      { expiresIn: '7d' }
+    );
+
     return res.json({
       success: true,
       message: 'Profile updated successfully.',
+      token: newToken,
       owner: {
         id: req.owner.id,
         fullName: fullName.trim(),
@@ -129,9 +138,17 @@ router.put('/password', authenticateOwner, async (req, res) => {
 
     logActivity('auth', 'Password Changed', `Owner '${req.owner.username}' changed their account password`, 'success');
 
+    const secret = process.env.JWT_SECRET || 'fallback_secret_key_locker';
+    const newToken = jwt.sign(
+      { id: req.owner.id, username: req.owner.username, email: req.owner.email },
+      secret,
+      { expiresIn: '7d' }
+    );
+
     return res.json({
       success: true,
-      message: 'Password changed successfully.'
+      message: 'Password changed successfully.',
+      token: newToken
     });
   } catch (err) {
     console.error('[OwnerPassword] Error changing password:', err);

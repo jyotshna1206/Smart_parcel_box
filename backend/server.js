@@ -76,7 +76,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({ success: false, error: 'Internal server error' });
 });
 
-// Initialize database & start server
+// Initialize database & start server (reloaded)
 async function startServer() {
   try {
     await ensureOwnerAccount();

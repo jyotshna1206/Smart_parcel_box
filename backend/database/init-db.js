@@ -11,10 +11,63 @@ dotenv.config({ path: path.join(__dirname, '../.env') });
 export async function ensureOwnerAccount() {
   initDatabase();
 
-  const existingOwner = db.prepare('SELECT id, username, email FROM owners LIMIT 1').get();
+  const existingOwner = db.prepare('SELECT id, full_name, username, email, phone, password_hash FROM owners LIMIT 1').get();
   if (existingOwner) {
     console.log(`[DB] Existing owner found: ${existingOwner.username} (${existingOwner.email})`);
-    return existingOwner;
+
+    const envPassword = process.env.INITIAL_OWNER_PASSWORD;
+    const envUsername = process.env.INITIAL_OWNER_USERNAME;
+    const envEmail = process.env.INITIAL_OWNER_EMAIL;
+    const envPhone = process.env.INITIAL_OWNER_PHONE;
+    const envName = process.env.INITIAL_OWNER_NAME;
+
+    let needsUpdate = false;
+    let newHash = existingOwner.password_hash;
+    let targetUsername = existingOwner.username;
+    let targetEmail = existingOwner.email;
+    let targetFullName = existingOwner.full_name;
+    let targetPhone = existingOwner.phone;
+
+    if (envPassword) {
+      const isMatch = await bcrypt.compare(envPassword, existingOwner.password_hash);
+      if (!isMatch) {
+        console.log(`[DB] Synchronizing owner password with INITIAL_OWNER_PASSWORD from .env...`);
+        const salt = await bcrypt.genSalt(10);
+        newHash = await bcrypt.hash(envPassword, salt);
+        needsUpdate = true;
+      }
+    }
+
+    if (envUsername && envUsername.trim().toLowerCase() !== (existingOwner.username || '').toLowerCase()) {
+      targetUsername = envUsername.trim();
+      needsUpdate = true;
+    }
+
+    if (envEmail && envEmail.trim().toLowerCase() !== (existingOwner.email || '').toLowerCase()) {
+      targetEmail = envEmail.trim();
+      needsUpdate = true;
+    }
+
+    if (envName && envName.trim() && envName.trim() !== existingOwner.full_name) {
+      targetFullName = envName.trim();
+      needsUpdate = true;
+    }
+
+    if (envPhone && envPhone.trim() && envPhone.trim() !== existingOwner.phone) {
+      targetPhone = envPhone.trim();
+      needsUpdate = true;
+    }
+
+    if (needsUpdate) {
+      db.prepare(`
+        UPDATE owners
+        SET full_name = ?, username = ?, email = ?, phone = ?, password_hash = ?, updated_at = datetime('now', 'localtime')
+        WHERE id = ?
+      `).run(targetFullName, targetUsername, targetEmail, targetPhone, newHash, existingOwner.id);
+      console.log(`[DB] Owner credentials successfully updated in database.`);
+    }
+
+    return db.prepare('SELECT id, full_name, username, email, phone FROM owners WHERE id = ?').get(existingOwner.id);
   }
 
   const username = process.env.INITIAL_OWNER_USERNAME || 'Jyotshna';

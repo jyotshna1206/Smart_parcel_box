@@ -3,11 +3,41 @@
  * Communicates directly with Node.js Express Backend
  */
 
-const API_BASE_URL = import.meta.env.VITE_BACKEND_API_URL || 'http://localhost:5000/api';
+const DEFAULT_API_URL = import.meta.env.VITE_BACKEND_API_URL || 'http://localhost:5000/api';
 
 class ApiService {
   constructor() {
-    this.baseUrl = API_BASE_URL;
+    this.baseUrl = localStorage.getItem('smart_locker_api_url') || DEFAULT_API_URL;
+  }
+
+  getBaseUrl() {
+    return this.baseUrl;
+  }
+
+  setBaseUrl(url) {
+    if (url && url.trim()) {
+      let cleaned = url.trim().replace(/\/+$/, '');
+      if (!cleaned.endsWith('/api')) {
+        cleaned = `${cleaned}/api`;
+      }
+      this.baseUrl = cleaned;
+      localStorage.setItem('smart_locker_api_url', cleaned);
+    } else {
+      this.baseUrl = DEFAULT_API_URL;
+      localStorage.removeItem('smart_locker_api_url');
+    }
+    return this.baseUrl;
+  }
+
+  async testConnection(url) {
+    const target = url ? (url.trim().replace(/\/+$/, '').endsWith('/api') ? `${url.trim().replace(/\/+$/, '')}/health` : `${url.trim().replace(/\/+$/, '')}/api/health`) : `${this.baseUrl}/health`;
+    try {
+      const res = await fetch(target, { method: 'GET', signal: AbortSignal.timeout(5000) });
+      const json = await res.json().catch(() => ({}));
+      return { success: res.ok && json.status === 'healthy', data: json };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
   }
 
   getToken() {
@@ -99,17 +129,28 @@ class ApiService {
   }
 
   async updateProfile(profileData) {
-    return this.request('/owner/profile', {
+    const data = await this.request('/owner/profile', {
       method: 'PUT',
       body: JSON.stringify(profileData)
     });
+    if (data.token) {
+      this.setToken(data.token);
+    }
+    if (data.owner) {
+      localStorage.setItem('smart_locker_owner', JSON.stringify(data.owner));
+    }
+    return data;
   }
 
   async changePassword(passwordData) {
-    return this.request('/owner/password', {
+    const data = await this.request('/owner/password', {
       method: 'PUT',
       body: JSON.stringify(passwordData)
     });
+    if (data.token) {
+      this.setToken(data.token);
+    }
+    return data;
   }
 
   // Dashboard Telemetry
